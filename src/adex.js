@@ -119,6 +119,7 @@ export class AdexClient {
       shortId: tx?.shortId || r?.shortId || null,
       status: normalizeStatus(tx?.status || r?.status),
       amountCents,
+      feeCents: this.fromWire(tx?.fee ?? tx?.fee_amount ?? r?.fee ?? r?.fee_amount),
       qrCode,
       qrCodeUrl: tx?.pix?.qrCodeUrl || r?.pix?.qrCodeUrl || null,
       expiresAt: tx?.pix?.expirationDate || r?.pix?.expirationDate || null,
@@ -134,6 +135,7 @@ export class AdexClient {
       transactionId: t?.id || transactionId,
       status: normalizeStatus(t?.status),
       amountCents: this.fromWire(t?.amount),
+      feeCents: this.fromWire(t?.fee_amount ?? t?.fee),
       paidAt: t?.paid_at || null,
       raw: r,
     };

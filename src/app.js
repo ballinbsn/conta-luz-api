@@ -30,9 +30,9 @@ const csvCell = (v) => {
   return `"${s.replace(/"/g, '""')}"`;
 };
 
-export function createApp({ config, store, adex, log = console }) {
+export function createApp({ config, store, adex, utmify = null, log = console }) {
   const app = express();
-  const orders = createOrderService({ config, store, adex, log });
+  const orders = createOrderService({ config, store, adex, utmify, log });
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
 
@@ -42,10 +42,10 @@ export function createApp({ config, store, adex, log = console }) {
         useDefaults: false,
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", 'https://*.utmify.com.br'],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https://*.utmify.com.br'],
+          connectSrc: ["'self'", 'https://*.utmify.com.br', 'https://api.ipify.org', 'https://api6.ipify.org'],
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],

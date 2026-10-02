@@ -63,5 +63,6 @@ npm test                   # 21 testes
 ## Pendências conhecidas
 
 - **Cartão de crédito:** a doc da Adex exige tokenizar o cartão no navegador com `PayGateway.createToken(...)`, mas **não publica a URL dessa biblioteca**. Peça o script ao suporte da Adex; com ele o cartão entra em ~1 hora de trabalho. Até lá o checkout é só PIX (maior conversão no Brasil de qualquer forma).
-- **Meta CAPI / pixel:** nada de rastreamento foi incluído, como pedido. As UTMs/`fbclid` chegam do funil e ficam salvas em cada pedido (`tracking`), prontas para enviar à Conversions API depois.
+- **Utmify:** pixel + script de UTMs instalados (`public/utmify.js`, mesmo ID do funil). Cada venda é enviada à API da Utmify (`waiting_payment` ao gerar o PIX, depois `paid`/`refunded`/`refused`) quando `UTMIFY_API_TOKEN` está definido. Primeiro envio: use `UTMIFY_TEST=true` (valida sem salvar), confira nos logs e remova a variável.
+- **Meta CAPI:** não incluída. UTMs/`fbclid` ficam salvos em cada pedido (`tracking`), prontos para a Conversions API.
 - `external_id` no `pix-receive` não aparece na doc de criação (só na consulta); é enviado e ignorado se não suportado. O vínculo principal é pelo `transaction_id`.

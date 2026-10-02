@@ -4,6 +4,7 @@ import { getOffer, getShipping, computeTotals, DEFAULT_SHIPPING_ID } from './cat
 import { adexUnavailable, AdexError } from './adex.js';
 import { HttpError } from './lib/errors.js';
 import { pixAmountCents } from './lib/emv.js';
+import { STATUS_MAP } from './utmify.js';
 import { validateIdentity, validateAddress, validateCpf, sanitizeTracking } from './lib/validate.js';
 
 const FINAL = new Set(['paid', 'refunded']);
@@ -16,11 +17,29 @@ const safeEqual = (a, b) => {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
 
-export function createOrderService({ config, store, adex, log = console }) {
+export function createOrderService({ config, store, adex, utmify = null, log = console }) {
   const note = (order, type, detail) => {
     (order.events ||= []).push({ at: nowIso(), type, ...(detail ? { detail } : {}) });
     if (order.events.length > 50) order.events.splice(0, order.events.length - 50);
   };
+
+  // Avisa a Utmify (sem travar o cliente). Cada status é enviado uma única vez por pedido.
+  async function notifyUtmify(order) {
+    if (!utmify?.enabled) return;
+    const st = STATUS_MAP[order.status];
+    if (!st) return;
+    order.utmify ||= {};
+    if (order.utmify[st]) return;
+    try {
+      await utmify.sendOrder(order, st);
+      order.utmify[st] = nowIso();
+      note(order, `utmify:${st}`);
+    } catch (err) {
+      log.error('[utmify] envio falhou', { orderId: order.id, status: st, message: err.message });
+      note(order, `utmify_failed:${st}`, err.message);
+    }
+    await store.saveOrder(order).catch(() => {});
+  }
 
   async function toPublic(order, { withPix = true } = {}) {
     const pub = {
@@ -148,6 +167,7 @@ export function createOrderService({ config, store, adex, log = console }) {
       shortId: tx.shortId,
       qrCode: tx.qrCode,
       expiresAt: tx.expiresAt || expiresAt.toISOString(),
+      feeCents: tx.feeCents ?? null,
       lastCheckedAt: null,
     };
     order.status = tx.status === 'paid' ? 'paid' : 'awaiting_payment';
@@ -155,6 +175,7 @@ export function createOrderService({ config, store, adex, log = console }) {
     note(order, 'pix_created', tx.transactionId);
     await store.saveOrder(order);
 
+    notifyUtmify(order).catch(() => {});
     if (order.leadId) {
       store.getLead(order.leadId).then((l) => l && store.saveLead({ ...l, converted: true, orderId: order.id })).catch(() => {});
     }
@@ -178,9 +199,11 @@ export function createOrderService({ config, store, adex, log = console }) {
     } else if (adexStatus === 'failed' || adexStatus === 'expired') {
       if (!FINAL.has(order.status) && order.status !== 'payment_review') order.status = adexStatus;
     }
+    if (meta.feeCents != null && order.adex) order.adex.feeCents = meta.feeCents;
     if (order.status !== prev) {
       note(order, `status:${order.status}`, meta.source);
       await store.saveOrder(order);
+      notifyUtmify(order).catch(() => {});
     }
     return order;
   }
@@ -192,7 +215,7 @@ export function createOrderService({ config, store, adex, log = console }) {
     order.adex.lastCheckedAt = nowIso();
     try {
       const t = await adex.getTransaction(order.adex.transactionId);
-      await applyStatus(order, t.status, { amountCents: t.amountCents, paidAt: t.paidAt, source: 'poll' });
+      await applyStatus(order, t.status, { amountCents: t.amountCents, feeCents: t.feeCents, paidAt: t.paidAt, source: 'poll' });
     } catch (err) {
       log.warn('[adex] consulta de status falhou', { orderId: order.id, message: err.message });
     }
@@ -255,7 +278,7 @@ export function createOrderService({ config, store, adex, log = console }) {
         log.error('[webhook] não foi possível confirmar na API', err.message);
         throw new HttpError(502, 'verify_failed', 'Falha ao confirmar pagamento.');
       }
-      await applyStatus(order, t.status, { amountCents: t.amountCents, paidAt: t.paidAt, source: 'webhook' });
+      await applyStatus(order, t.status, { amountCents: t.amountCents, feeCents: t.feeCents, paidAt: t.paidAt, source: 'webhook' });
     } else {
       await applyStatus(order, target, { source: 'webhook' });
     }

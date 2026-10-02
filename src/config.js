@@ -26,6 +26,13 @@ export function loadConfig(e = process.env) {
       amountUnit: e.ADEX_AMOUNT_UNIT === 'centavos' ? 'centavos' : 'reais',
       timeoutMs: int(e.ADEX_TIMEOUT_MS, 20000),
     }),
+    utmify: Object.freeze({
+      token: e.UTMIFY_API_TOKEN || '',
+      baseUrl: trimSlash(e.UTMIFY_BASE_URL || 'https://api.utmify.com.br'),
+      platform: e.UTMIFY_PLATFORM || 'EcoVolt',
+      // true = a Utmify valida o envio mas NÃO salva (use na primeira vez; depois remova)
+      isTest: bool(e.UTMIFY_TEST, false),
+    }),
     store: Object.freeze({
       name: e.STORE_NAME || 'EcoVolt',
       supportEmail: e.SUPPORT_EMAIL || 'contato@naturalli.shop',
