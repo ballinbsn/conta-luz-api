@@ -11,5 +11,7 @@
   utms.async = true; utms.defer = true;
   utms.setAttribute("data-utmify-prevent-xcod-sck", "");
   utms.setAttribute("data-utmify-prevent-subids", "");
+  // nao deixa o script reescrever o src do player (reescrever recarrega o video e ele volta ao inicio, principalmente no celular)
+  utms.setAttribute("data-utmify-ignore-iframe", "");
   head.appendChild(utms);
 })();
