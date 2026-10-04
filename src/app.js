@@ -178,6 +178,32 @@ export function createApp({ config, store, adex, utmify = null, log = console })
     })
   );
 
+  // Reenvia à Utmify pedidos já pagos (ex.: vendas feitas com UTMIFY_TEST=true, que a Utmify ignora).
+  app.post(
+    '/api/admin/utmify/resend',
+    limiter(10),
+    admin,
+    wrap(async (req, res) => {
+      if (!utmify?.enabled) throw new HttpError(409, 'utmify_off', 'UTMIFY_API_TOKEN não configurado.');
+      if (utmify.isTest) throw new HttpError(409, 'utmify_test', 'UTMIFY_TEST está ativo: remova a variável antes de reenviar.');
+      const ids = Array.isArray(req.body?.orderIds) ? req.body.orderIds.map(String) : null;
+      const list = (await store.listOrders({ status: 'paid', limit: 1000 })).filter((o) => !ids || ids.includes(o.id));
+      const results = [];
+      for (const o of list) {
+        try {
+          await utmify.sendOrder(o, 'paid');
+          (o.utmify ||= {}).paid = new Date().toISOString();
+          (o.events ||= []).push({ at: o.utmify.paid, type: 'utmify:paid:resend' });
+          await store.saveOrder(o);
+          results.push({ id: o.id, ok: true });
+        } catch (err) {
+          results.push({ id: o.id, ok: false, error: String(err.message).slice(0, 200) });
+        }
+      }
+      res.set('Cache-Control', 'no-store').json({ count: results.length, results });
+    })
+  );
+
   app.get(
     '/api/admin/orders.csv',
     limiter(30),
